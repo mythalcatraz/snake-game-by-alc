@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tiny Snake</title>
+  <style>
+    html,body{height:100%;margin:0;background:#0f0f13;color:#eaeaea;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .wrap{display:grid;place-items:center;height:100%;gap:12px}
+    canvas{background:#111;border:1px solid #2a2a2a;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+    .hud{opacity:.9;font-size:14px}
+    kbd{background:#222;border:1px solid #333;border-bottom-width:2px;border-radius:6px;padding:2px 6px;font-family:inherit}
+    .score{font-weight:700}
+    .overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)}
+    .card{background:#13131a;border:1px solid #2a2a2a;border-radius:16px;padding:18px 16px;max-width:440px;box-shadow:0 10px 35px rgba(0,0,0,.45)}
+    .row{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:10px}
+    .btn{cursor:pointer;border:none;border-radius:12px;padding:10px 14px;background:#5ae36a;font-weight:700}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .muted{opacity:.8;font-size:13px}
+    label.switch{display:inline-flex;align-items:center;gap:8px;user-select:none}
+    input[type="checkbox"]{width:18px;height:18px}
+    .log{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;background:#0b0b0f;border:1px solid #222;border-radius:10px;padding:10px;min-height:42px;max-height:120px;overflow:auto;margin-top:10px}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <canvas id="c" width="400" height="400" aria-label="Snake game"></canvas>
+    <div class="hud">
+      <span class="score">Score: <span id="s">0</span></span>
+      &nbsp;•&nbsp; Move: <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>
+      &nbsp;•&nbsp; Pause: <kbd>P</kbd>
+      &nbsp;•&nbsp; Restart: <kbd>Enter</kbd>
+    </div>
+  </div>
+
+  <!-- Mini App overlay -->
+  <div class="overlay" id="overlay">
+    <div class="card">
+      <h2 style="margin:0 0 6px 0">Play Snake</h2>
+      <div class="muted">If opened inside a Farcaster Mini App, we’ll connect your wallet and (optionally) send a small on-chain transaction when you start.</div>
+      <div class="row">
+        <label class="switch"><input id="txOnStart" type="checkbox" checked /> Make a transaction on start</label>
+        <button class="btn" id="playBtn">Play</button>
+      </div>
+      <div class="log" id="log"></div>
+      <div class="muted" style="margin-top:8px">Tip: You can change recipient/amount in code. Transactions require gas and user approval.</div>
+    </div>
+  </div>
+  </div>
+
+  <script type="module">
+  // Import the Farcaster Mini App SDK from a CDN for plain HTML usage.
+  // Docs mention CDN usage via esm.sh; we import directly as an ESM module.
+  // Reference: Mini App SDK actions (signin, ready, sendToken) and wallet provider (EIP-1193). 
+  // Docs: https://miniapps.farcaster.xyz/llms-full.txt (see Actions & Wallet sections).
+  import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk';
+
+  const overlay = document.getElementById('overlay');
+  const playBtn = document.getElementById('playBtn');
+  const txOnStartEl = document.getElementById('txOnStart');
+  const logEl = document.getElementById('log');
+
+  function log(msg){ logEl.textContent += (logEl.textContent? '
+' : '') + msg; logEl.scrollTop = logEl.scrollHeight; }
+
+  // Call ready() once UI is mounted so Farcaster hides the splash screen.
+  // If this page is opened outside Farcaster, this is a no-op.
+  try { await sdk.actions.ready(); } catch {}
+
+  playBtn.addEventListener('click', async ()=>{
+    playBtn.disabled = true; logEl.textContent='';
+    try {
+      // Prompt Sign-in with Farcaster (SIWF) if inside a Mini App host.
+      try { await sdk.actions.signin(); log('Signed in with Farcaster.'); } catch (e) { log('Sign-in skipped or not in Mini App.'); }
+
+      if (txOnStartEl.checked){
+        // Preferred UX: use the high-level action to send tokens (lets host pick chain & wallet UI)
+        // Customize these defaults ↓↓↓
+        const TO_ADDRESS = '0x000000000000000000000000000000000000dead'; // TODO: set your recipient
+        const AMOUNT_ETH = '0.000001'; // a tiny amount; adjust. Users still pay gas.
+        try {
+          await sdk.actions.sendToken({
+            to: TO_ADDRESS,
+            amount: AMOUNT_ETH,
+            token: { standard: 'ETH' } // native token
+          });
+          log('sendToken action invoked. User approved or canceled in wallet.');
+        } catch (e) {
+          log('sendToken not available or rejected. Falling back to EIP-1193 provider…');
+          // Fallback: directly request an Ethereum provider and send a tx.
+          try {
+            const provider = await sdk.wallet.getEthereumProvider();
+            const accounts = await provider.request({ method: 'eth_requestAccounts' });
+            const from = accounts[0];
+            const chainId = await provider.request({ method: 'eth_chainId' });
+            // Convert ETH amount to wei hex
+            const wei = BigInt(Math.floor(parseFloat(AMOUNT_ETH) * 1e18)).toString(16);
+            const txHash = await provider.request({
+              method: 'eth_sendTransaction',
+              params: [{ from, to: TO_ADDRESS, value: '0x'+wei, chainId }]
+            });
+            log('Transaction submitted: '+txHash);
+          } catch (err) {
+            log('Wallet/provider not available or user rejected: '+(err?.message||err));
+          }
+        }
+      }
+
+      // Start the game after wallet flow completes
+      window.__startSnake?.();
+      overlay.style.display='none';
+    } finally {
+      playBtn.disabled = false;
+    }
+  });
+</script>
+
+<script>
+  (()=>{
+    const cvs = document.getElementById('c');
+    const ctx = cvs.getContext('2d');
+    const scoreEl = document.getElementById('s');
+
+    const N = 20;               // grid size (20x20)
+    const SZ = cvs.width / N;   // cell size
+
+    let snake, dir, nextDir, food, playing, timer, score;
+
+    function reset(){
+      snake = [{x:10,y:10}];
+      dir = {x:1,y:0};
+      nextDir = {x:1,y:0};
+      score = 0; playing = true;
+      placeFood();
+      updateScore();
+      if (timer) clearInterval(timer);
+      timer = setInterval(tick, 100);
+      draw();
+    }
+
+    function updateScore(){ scoreEl.textContent = score; }
+
+    function rand(n){ return Math.floor(Math.random()*n); }
+
+    function placeFood(){
+      do { food = {x:rand(N), y:rand(N)}; }
+      while (snake.some(s=>s.x===food.x && s.y===food.y));
+    }
+
+    function tick(){
+      if (!playing) return;
+      // lock in the next direction at tick boundary
+      if ((nextDir.x !== -dir.x) || (snake.length===1)) dir.x = nextDir.x;
+      if ((nextDir.y !== -dir.y) || (snake.length===1)) dir.y = nextDir.y;
+
+      const head = {x: snake[0].x + dir.x, y: snake[0].y + dir.y};
+
+      // wall collision
+      if (head.x<0 || head.y<0 || head.x>=N || head.y>=N) return gameOver();
+      // self collision
+      if (snake.some((s,i)=> i && s.x===head.x && s.y===head.y)) return gameOver();
+
+      snake.unshift(head);
+      if (head.x===food.x && head.y===food.y){
+        score++; updateScore(); placeFood();
+      } else { snake.pop(); }
+
+      draw();
+    }
+
+    function gameOver(){
+      playing = false; clearInterval(timer); timer = null; draw(true);
+    }
+
+    function draw(over=false){
+      // board
+      ctx.fillStyle = '#0b0b0f'; ctx.fillRect(0,0,cvs.width,cvs.height);
+      // grid dots (subtle)
+      ctx.fillStyle = '#15151b';
+      for(let y=0;y<N;y++) for(let x=0;x<N;x++) ctx.fillRect(x*SZ+SZ/2-1,y*SZ+SZ/2-1,2,2);
+      // food
+      ctx.fillStyle = '#ff375f';
+      ctx.beginPath();
+      ctx.arc(food.x*SZ+SZ/2, food.y*SZ+SZ/2, SZ*0.35, 0, Math.PI*2);
+      ctx.fill();
+      // snake
+      ctx.fillStyle = '#5ae36a';
+      snake.forEach((p,i)=>{
+        const r = i? 6:8;
+        roundRect(p.x*SZ+2, p.y*SZ+2, SZ-4, SZ-4, r);
+        ctx.fill();
+      });
+      // over text
+      if (over){
+        ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(0,0,cvs.width,cvs.height);
+        ctx.fillStyle = '#eaeaea'; ctx.textAlign='center';
+        ctx.font = 'bold 26px system-ui, sans-serif';
+        ctx.fillText('Game Over', cvs.width/2, cvs.height/2 - 10);
+        ctx.font = '14px system-ui, sans-serif';
+        ctx.fillText('Press Enter to restart', cvs.width/2, cvs.height/2 + 16);
+      }
+    }
+
+    function roundRect(x,y,w,h,r){
+      ctx.beginPath();
+      ctx.moveTo(x+r,y);
+      ctx.arcTo(x+w,y,x+w,y+h,r);
+      ctx.arcTo(x+w,y+h,x,y+h,r);
+      ctx.arcTo(x,y+h,x,y,r);
+      ctx.arcTo(x,y,x+w,y,r);
+      ctx.closePath();
+    }
+
+    addEventListener('keydown', e=>{
+      const k = e.key.toLowerCase();
+      if (k==='arrowup' || k==='w') nextDir = {x:0,y:-1};
+      else if (k==='arrowdown' || k==='s') nextDir = {x:0,y:1};
+      else if (k==='arrowleft' || k==='a') nextDir = {x:-1,y:0};
+      else if (k==='arrowright' || k==='d') nextDir = {x:1,y:0};
+      else if (k==='p') playing = !playing, playing && (timer = setInterval(tick,100));
+      else if (k==='enter') reset();
+    });
+
+    // Expose a start function used by the overlay button
+    window.__startSnake = reset;
+  })();
+  </script>
+</body>
+</html>
