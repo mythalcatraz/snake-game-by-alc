@@ -1,0 +1,18 @@
+{
+  "accountAssociation": {
+    "header": "eyJmaWQiOjUyMTQxMSwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweEFjMzMzRjRGNzI0YWMxODFkZEI4Q0U1OEFmNDU4N2ZjZkYxZEEyODMifQ",
+    "payload": "eyJkb21haW4iOiJmYXJjYXN0ZXItYWktY29tcGFuaW9uLnZlcmNlbC5hcHAifQ",
+    "signature": "MHg5MGFkNzFmZjJmN2M3ZTQwMGU3NzUyMDM3ZGQ2ZjM5NDU3MjE3ZTEwMTQwYzZhNzUwZjhlMGE5MWZjMzQxZjAzNTA4MjM0MTgyYzQyMGI2YjNjNzBjNjM0OGQ0NzhiYTEzOTZjOGE3ZTFjM2Y3NTMxYjM4ZmE1MjEwNmI1YWZhNzFj"
+  },
+  "miniapp": {
+    "version": "1",
+    "name": "SNAKE GAME",
+    "iconUrl": "https://farcaster-ai-companion.vercel.app/iconedating.png",
+    "homeUrl": "https://farcaster-ai-companion.vercel.app/",
+    "imageUrl": "https://farcaster-ai-companion.vercel.app/homeimage.png",
+    "buttonTitle": "Start GAME",
+    "splashImageUrl": "https://farcaster-ai-companion.vercel.app/splashImage.png",
+    "splashBackgroundColor": "#1a0f2e",
+    "description": "Match with Farcaster users for timed 1-on-1 conversations based on shared interests"
+  }
+}
