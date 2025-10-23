@@ -7,11 +7,11 @@
   "miniapp": {
     "version": "1",
     "name": "SNAKE GAME",
-    "iconUrl": "https://farcaster-ai-companion.vercel.app/iconedating.png",
+    "iconUrl": "https://wallpapers.com/images/high/snake-game-icon-2u07k6i14eluw4oi.webp",
     "homeUrl": "https://farcaster-ai-companion.vercel.app/",
-    "imageUrl": "https://farcaster-ai-companion.vercel.app/homeimage.png",
+    "imageUrl": "https://projects.arduinocontent.cc/cover-images/aec6b979-c133-4793-81b3-3df2fe863062.jpg",
     "buttonTitle": "Start GAME",
-    "splashImageUrl": "https://farcaster-ai-companion.vercel.app/splashImage.png",
+    "splashImageUrl": "https://projects.arduinocontent.cc/cover-images/aec6b979-c133-4793-81b3-3df2fe863062.jpg",
     "splashBackgroundColor": "#1a0f2e",
     "description": "Match with Farcaster users for timed 1-on-1 conversations based on shared interests"
   }
