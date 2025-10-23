@@ -1,67 +1,55 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Snake – Farcaster Mini App (Auto TX + Play Again)</title>
-  <style>
-    :root { color-scheme: dark; }
-    body {
-      margin:0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell;
-      background:#0b0f12; color:#e7ecf0;
-      display:grid; place-items:center; min-height:100dvh;
-    }
-    .wrap { width:min(480px,95vw); position:relative; }
-    .card {
-      background:#12171b; border:1px solid #1f2a32;
-      border-radius:14px; padding:16px;
-      box-shadow:0 10px 30px rgba(0,0,0,.35);
-    }
-    .row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-    .title { font-weight:800; font-size:20px; margin:0 0 8px; }
-    .muted { color:#9aa7b1; font-size:14px; line-height:1.35; }
-    button {
-      appearance:none; border:0; background:#1dd979; color:#04130c;
-      font-weight:700; padding:10px 16px; border-radius:12px; cursor:pointer;
-    }
-    button:disabled { opacity:.6; cursor:not-allowed; }
-    .overlay {
-      position:fixed; inset:0; display:grid; place-items:center;
-      background:rgba(8,11,14,.6); backdrop-filter:blur(2px);
-    }
-    .hidden { display:none!important; }
-    canvas {
-      display:block; width:min(480px,95vw); height:min(480px,95vw);
-      background:#0e1418; border:1px solid #1f2a32; border-radius:12px; margin-top:18px;
-    }
-    .hud {
-      display:flex; justify-content:space-between; margin-top:8px;
-      font-size:14px; color:#a8b6c1;
-    }
-    .kbd {
-      background:#0f151a;border:1px solid #1f2a32;
-      border-radius:8px;padding:2px 6px;
-    }
-    #play-again {
-      position:absolute;
-      left:50%; top:50%; transform:translate(-50%,-50%);
-      padding:12px 18px; border-radius:12px; border:0;
-      font-weight:700; background:#1dd979; color:#04130c;
-      cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.35);
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Snake – Mini App (TX status)</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin:0; font-family: system-ui,-apple-system,Segoe UI,Roboto; background:#0b0f12; color:#e7ecf0; display:grid; place-items:center; min-height:100dvh; }
+  .wrap { width:min(480px,95vw); position:relative; }
+  .card { background:#12171b; border:1px solid #1f2a32; border-radius:14px; padding:16px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .title { font-weight:800; font-size:20px; margin:0 0 8px; }
+  .muted { color:#9aa7b1; font-size:14px; line-height:1.35; }
+  button { appearance:none; border:0; background:#1dd979; color:#04130c; font-weight:700; padding:10px 16px; border-radius:12px; cursor:pointer; }
+  button:disabled { opacity:.6; cursor:not-allowed; }
+  .overlay { position:fixed; inset:0; display:grid; place-items:center; background:rgba(8,11,14,.6); backdrop-filter:blur(2px); }
+  .hidden { display:none!important; }
+  canvas { display:block; width:min(480px,95vw); height:min(480px,95vw); background:#0e1418; border:1px solid #1f2a32; border-radius:12px; margin-top:18px; }
+  .hud { display:flex; justify-content:space-between; margin-top:8px; font-size:14px; color:#a8b6c1; }
+  .kbd { background:#0f151a;border:1px solid #1f2a32;border-radius:8px;padding:2px 6px; }
+
+  /* Play Again */
+  #play-again {
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    padding:12px 18px; border-radius:12px; border:0; font-weight:700;
+    background:#1dd979; color:#04130c; cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.35);
+  }
+
+  /* Status bar */
+  #status {
+    margin-top:10px; font-size:13px; line-height:1.35;
+    background:#0f151a; border:1px solid #1f2a32; border-radius:10px; padding:10px;
+  }
+  #status b { color:#cde7d8; }
+  #status .ok { color:#4ade80; }
+  #status .warn { color:#fbbf24; }
+  #status .err { color:#f87171; }
+  #status a { color:#86c6ff; text-decoration:none; }
+</style>
 </head>
 <body>
   <div class="wrap">
     <div id="intro-overlay" class="overlay">
       <div class="card" role="dialog" aria-modal="true">
         <h1 class="title">Play Snake</h1>
-        <p class="muted">When you start, we’ll automatically send a small Base transaction (demo) before the game begins.</p>
+        <p class="muted">We’ll automatically try a tiny Base transfer, then start the game.</p>
         <div class="row">
           <div class="muted">Tip: set recipient/amount in code.</div>
           <button id="play" type="button">Play</button>
         </div>
+        <div id="status" class="hidden"></div>
       </div>
     </div>
 
@@ -74,138 +62,159 @@
     </div>
   </div>
 
-  <script type="module">
-    import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk'
-    sdk.actions.ready();
+<script type="module">
+  import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk'
+  sdk.actions.ready();
 
-    // === CONFIG ===
-    const USE_BASE_SEPOLIA = false;   // true = Base Sepolia, false = Base Mainnet
-    const RECIPIENT = "0x02212a875c56baE7AF27A5a389FD4e8A11442692";
-    const AMOUNT_ETH = "0.00001";
-    const BASE_MAINNET = { chainId: "0x2105" };
-    const BASE_SEPOLIA = { chainId: "0x14a34" };
-    const TARGET_CHAIN = USE_BASE_SEPOLIA ? BASE_SEPOLIA : BASE_MAINNET;
+  // ===== CONFIG (edit) =====
+  const USE_BASE_SEPOLIA = false;     // true: 84532, false: 8453
+  const RECIPIENT = "0x02212a875c56baE7AF27A5a389FD4e8A11442692";
+  const AMOUNT_ETH = "0.00001";
 
-    // === HELPERS ===
-    function parseEther(str){
-      const [w,f=""]=String(str).split(".");
-      const frac=(f+"0".repeat(18)).slice(0,18);
-      return "0x"+(BigInt(w)*10n**18n+BigInt(frac)).toString(16);
-    }
-    async function getProvider(){
-      try { return await sdk.wallet.getEthereumProvider(); }
-      catch { return window.ethereum ?? null; }
-    }
-    async function ensureChain(provider, chainId){
-      const current=(await provider.request({method:"eth_chainId"}))?.toLowerCase();
-      if(current===chainId.toLowerCase()) return;
-      try {
-        await provider.request({method:"wallet_switchEthereumChain",params:[{chainId}]});
-      } catch (err) {
-        if(err?.code===4902){
-          await provider.request({method:"wallet_addEthereumChain",params:[{chainId}]});
-          await provider.request({method:"wallet_switchEthereumChain",params:[{chainId}]});
-        }
+  const BASE_MAINNET = { chainId: "0x2105", explorer: "https://basescan.org/tx/" };
+  const BASE_SEPOLIA = { chainId: "0x14a34", explorer: "https://sepolia.basescan.org/tx/" };
+  const TARGET = USE_BASE_SEPOLIA ? BASE_SEPOLIA : BASE_MAINNET;
+
+  const statusEl = document.getElementById('status');
+  function showStatus() { statusEl.classList.remove('hidden'); }
+  function line(html) { showStatus(); statusEl.insertAdjacentHTML('beforeend', `<div>${html}</div>`); }
+  function clearStatus() { statusEl.innerHTML=''; }
+
+  // ===== Helpers =====
+  function parseEther(x){ const [w,f=""]=String(x).split('.'); const frac=(f+'0'.repeat(18)).slice(0,18); return '0x'+(BigInt(w)*10n**18n+BigInt(frac)).toString(16); }
+
+  async function getProvider(){
+    try {
+      const p = await sdk.wallet.getEthereumProvider();
+      if (p) return p;
+    } catch {}
+    return window.ethereum ?? null;
+  }
+
+  async function ensureChain(provider, chainId) {
+    const current = (await provider.request({ method:'eth_chainId' }))?.toLowerCase();
+    if (current === chainId.toLowerCase()) return;
+    try {
+      await provider.request({ method:'wallet_switchEthereumChain', params:[{ chainId }] });
+    } catch (e) {
+      if (e?.code === 4902) {
+        await provider.request({ method:'wallet_addEthereumChain', params:[{ chainId }] });
+        await provider.request({ method:'wallet_switchEthereumChain', params:[{ chainId }] });
+      } else {
+        throw e;
       }
     }
-    async function sendBaseTx(){
-      const provider = await getProvider();
-      if(!provider) { console.warn("No provider found."); return; }
-      try {
-        const [from] = await provider.request({method:"eth_requestAccounts"});
-        await ensureChain(provider, TARGET_CHAIN.chainId);
-        const hash = await provider.request({
-          method:"eth_sendTransaction",
-          params:[{ from, to: RECIPIENT, value: parseEther(AMOUNT_ETH) }]
-        });
-        console.log("Base TX sent:", hash);
-      } catch (err) {
-        console.warn("TX failed or rejected:", err);
-      }
+  }
+
+  async function sendTxWithUI(){
+    clearStatus();
+    line(`<b>Step 1:</b> locating wallet provider…`);
+    const provider = await getProvider();
+    if (!provider) { line(`<span class="err">No provider available. Open inside the Farcaster app or enable a wallet.</span>`); return null; }
+    line(`<span class="ok">Provider ready.</span>`);
+
+    try {
+      line(`<b>Step 2:</b> requesting accounts…`);
+      const [from] = await provider.request({ method:'eth_requestAccounts' });
+      line(`<span class="ok">Account: ${from.slice(0,6)}…${from.slice(-4)}</span>`);
+
+      line(`<b>Step 3:</b> switching to Base…`);
+      await ensureChain(provider, TARGET.chainId);
+      line(`<span class="ok">On Base${USE_BASE_SEPOLIA?' Sepolia':''}.</span>`);
+
+      line(`<b>Step 4:</b> sending ${AMOUNT_ETH} ETH to ${RECIPIENT.slice(0,6)}…${RECIPIENT.slice(-4)}…`);
+      const hash = await provider.request({
+        method: 'eth_sendTransaction',
+        params: [{ from, to: RECIPIENT, value: parseEther(AMOUNT_ETH) }]
+      });
+      line(`<span class="ok">TX sent.</span> <a target="_blank" rel="noopener" href="${TARGET.explorer}${hash}">View on Basescan</a>`);
+      return hash;
+    } catch (err) {
+      line(`<span class="err">TX flow error:</span> <span class="warn">${(err && (err.message||err.toString())) || 'unknown'}</span>`);
+      return null;
+    }
+  }
+
+  document.getElementById('play').addEventListener('click', async (e)=>{
+    e.preventDefault();
+    e.currentTarget.disabled = true;
+    await sendTxWithUI();   // if this fails, we still start
+    startGame();
+  });
+
+  function startGame(){
+    document.getElementById('intro-overlay')?.classList.add('hidden');
+    initSnake();
+  }
+
+  // ===== Snake =====
+  function initSnake(){
+    const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),scoreEl=document.getElementById('score');
+    const playAgainBtn=document.getElementById('play-again');
+    const size=24,cells=canvas.width/size;
+    let snake=[{x:10,y:10}],dir={x:1,y:0},nextDir={x:1,y:0},food=spawn(),score=0,speed=120,alive=true,loopId;
+
+    draw();
+    window.addEventListener('keydown',handleKey);
+    function handleKey(e){
+      const k=e.key.toLowerCase();
+      if((k==='arrowup'||k==='w')&&dir.y!==1)nextDir={x:0,y:-1};
+      else if((k==='arrowdown'||k==='s')&&dir.y!==-1)nextDir={x:0,y:1};
+      else if((k==='arrowleft'||k==='a')&&dir.x!==1)nextDir={x:-1,y:0};
+      else if((k==='arrowright'||k==='d')&&dir.x!==-1)nextDir={x:1,y:0};
     }
 
-    // === UI ===
-    document.getElementById("play").addEventListener("click", async (e)=>{
-      e.preventDefault();
-      e.target.disabled = true;
-      await sendBaseTx();   // automatically send tx before start
-      startGame();
-    });
+    function spawn(){let fx,fy;do{fx=Math.floor(Math.random()*cells);fy=Math.floor(Math.random()*cells);}while(snake.some(s=>s.x===fx&&s.y===fy));return{x:fx,y:fy};}
 
-    function startGame(){
-      document.getElementById("intro-overlay")?.classList.add("hidden");
-      initSnake();
+    function step(){
+      if(!alive)return;
+      dir=nextDir;
+      const head={x:(snake[0].x+dir.x+cells)%cells,y:(snake[0].y+dir.y+cells)%cells};
+      if(snake.some(s=>s.x===head.x&&s.y===head.y)){alive=false;return gameOver();}
+      snake.unshift(head);
+      if(head.x===food.x&&head.y===food.y){score++;scoreEl.textContent=String(score);food=spawn();if(speed>60)speed-=4;}
+      else snake.pop();
+      draw(); loopId=setTimeout(step,speed);
     }
 
-    // === Game Logic ===
-    function initSnake(){
-      const canvas=document.getElementById("game"),ctx=canvas.getContext("2d"),scoreEl=document.getElementById("score");
-      const playAgainBtn=document.getElementById("play-again");
-      const size=24,cells=canvas.width/size;
-      let snake=[{x:10,y:10}],dir={x:1,y:0},nextDir={x:1,y:0},food=spawn(),score=0,speed=120,alive=true,loopId;
-
-      draw();
-      window.addEventListener("keydown",handleKey);
-      function handleKey(e){
-        const k=e.key.toLowerCase();
-        if((k==="arrowup"||k==="w")&&dir.y!==1)nextDir={x:0,y:-1};
-        else if((k==="arrowdown"||k==="s")&&dir.y!==-1)nextDir={x:0,y:1};
-        else if((k==="arrowleft"||k==="a")&&dir.x!==1)nextDir={x:-1,y:0};
-        else if((k==="arrowright"||k==="d")&&dir.x!==-1)nextDir={x:1,y:0};
+    function draw(){
+      ctx.fillStyle='#0e1418'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.strokeStyle='#0f1a21'; ctx.lineWidth=1;
+      for(let i=0;i<=cells;i++){
+        ctx.beginPath();ctx.moveTo(i*size+0.5,0);ctx.lineTo(i*size+0.5,canvas.height);ctx.stroke();
+        ctx.beginPath();ctx.moveTo(0,i*size+0.5);ctx.lineTo(canvas.width,i*size+0.5);ctx.stroke();
       }
-
-      function spawn(){let fx,fy;do{fx=Math.floor(Math.random()*cells);fy=Math.floor(Math.random()*cells);}while(snake.some(s=>s.x===fx&&s.y===fy));return{x:fx,y:fy};}
-
-      function step(){
-        if(!alive)return;
-        dir=nextDir;
-        const head={x:(snake[0].x+dir.x+cells)%cells,y:(snake[0].y+dir.y+cells)%cells};
-        if(snake.some(s=>s.x===head.x&&s.y===head.y)){alive=false;return gameOver();}
-        snake.unshift(head);
-        if(head.x===food.x&&head.y===food.y){
-          score++;scoreEl.textContent=score;food=spawn();if(speed>60)speed-=4;
-        }else snake.pop();
-        draw();loopId=setTimeout(step,speed);
-      }
-
-      function draw(){
-        ctx.fillStyle="#0e1418";ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.strokeStyle="#0f1a21";ctx.lineWidth=1;
-        for(let i=0;i<=cells;i++){
-          ctx.beginPath();ctx.moveTo(i*size+0.5,0);ctx.lineTo(i*size+0.5,canvas.height);ctx.stroke();
-          ctx.beginPath();ctx.moveTo(0,i*size+0.5);ctx.lineTo(canvas.width,i*size+0.5);ctx.stroke();
-        }
-        ctx.fillStyle="#ef4444";ctx.fillRect(food.x*size+2,food.y*size+2,size-4,size-4);
-        ctx.fillStyle="#22c55e";
-        snake.forEach((s,i)=>{const pad=i===0?1:3;ctx.fillRect(s.x*size+pad,s.y*size+pad,size-pad*2,size-pad*2);});
-      }
-
-      function gameOver(){
-        if(loopId)clearTimeout(loopId);
-        ctx.fillStyle="rgba(0,0,0,.4)";ctx.fillRect(0,0,canvas.width,canvas.height);
-        ctx.fillStyle="#e7ecf0";ctx.font="bold 32px system-ui";ctx.textAlign="center";
-        ctx.fillText("Game Over",canvas.width/2,canvas.height/2-6);
-        ctx.font="16px system-ui";ctx.fillStyle="#a8b6c1";
-        ctx.fillText("Press Enter or click Play Again",canvas.width/2,canvas.height/2+20);
-        playAgainBtn.classList.remove("hidden");
-
-        function restart(){
-          playAgainBtn.classList.add("hidden");
-          window.removeEventListener("keydown",onEnter);
-          snake=[{x:10,y:10}];
-          dir=nextDir={x:1,y:0};
-          food=spawn();
-          score=0;scoreEl.textContent="0";
-          speed=120;alive=true;
-          draw();loopId=setTimeout(step,speed);
-        }
-        function onEnter(e){if(e.key==="Enter")restart();}
-        playAgainBtn.addEventListener("click",restart,{once:true});
-        window.addEventListener("keydown",onEnter);
-      }
-
-      loopId=setTimeout(step,speed);
+      ctx.fillStyle='#ef4444'; ctx.fillRect(food.x*size+2,food.y*size+2,size-4,size-4);
+      ctx.fillStyle='#22c55e'; snake.forEach((s,i)=>{const pad=i===0?1:3; ctx.fillRect(s.x*size+pad,s.y*size+pad,size-pad*2,size-pad*2);});
     }
-  </script>
+
+    function gameOver(){
+      if(loopId) clearTimeout(loopId);
+      ctx.fillStyle='rgba(0,0,0,.4)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+      ctx.fillStyle='#e7ecf0'; ctx.font='bold 32px system-ui'; ctx.textAlign='center';
+      ctx.fillText('Game Over',canvas.width/2,canvas.height/2-6);
+      ctx.font='16px system-ui'; ctx.fillStyle='#a8b6c1';
+      ctx.fillText('Press Enter or click Play Again',canvas.width/2,canvas.height/2+20);
+      playAgainBtn.classList.remove('hidden');
+
+      function restart(){
+        playAgainBtn.classList.add('hidden');
+        window.removeEventListener('keydown',onEnter);
+        snake=[{x:10,y:10}]; dir=nextDir={x:1,y:0};
+        food=spawn(); score=0; scoreEl.textContent='0'; speed=120; alive=true;
+        draw(); loopId=setTimeout(step,speed);
+      }
+      function onEnter(e){ if(e.key==='Enter') restart(); }
+      playAgainBtn.addEventListener('click',restart,{once:true});
+      window.addEventListener('keydown',onEnter);
+    }
+
+    loopId=setTimeout(step,speed);
+  }
+
+  // Debug surfacing too
+  window.addEventListener('error', e => console.error('Window error:', e.error||e));
+  window.addEventListener('unhandledrejection', e => console.error('Unhandled promise:', e.reason));
+</script>
 </body>
 </html>
