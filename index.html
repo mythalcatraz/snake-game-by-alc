@@ -19,15 +19,11 @@
   canvas { display:block; width:min(480px,95vw); height:min(480px,95vw); background:#0e1418; border:1px solid #1f2a32; border-radius:12px; margin-top:18px; }
   .hud { display:flex; justify-content:space-between; margin-top:8px; font-size:14px; color:#a8b6c1; }
   .kbd { background:#0f151a;border:1px solid #1f2a32;border-radius:8px;padding:2px 6px; }
-
-  /* Play Again */
   #play-again {
     position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
     padding:12px 18px; border-radius:12px; border:0; font-weight:700;
     background:#1dd979; color:#04130c; cursor:pointer; box-shadow:0 10px 30px rgba(0,0,0,.35);
   }
-
-  /* Status panel */
   #status { margin-top:10px; font-size:13px; line-height:1.35; background:#0f151a; border:1px solid #1f2a32; border-radius:10px; padding:10px; }
   #status b { color:#cde7d8; }
   #status .ok { color:#4ade80; }
@@ -43,7 +39,7 @@
         <h1 class="title">Play Snake</h1>
         <p class="muted">A small Base transfer is required to start.</p>
         <div class="row">
-          <div class="muted">You can change recipient/amount in code.</div>
+          <div class="muted">Change recipient/amount in code.</div>
           <button id="play" type="button">Pay & Play</button>
         </div>
         <div id="status" class="hidden"></div>
@@ -63,36 +59,33 @@
   import { sdk } from 'https://esm.sh/@farcaster/miniapp-sdk'
   sdk.actions.ready();
 
-  // ===== CONFIG (edit these) =====
+  /* ===== CONFIG ===== */
   const USE_BASE_SEPOLIA = false;     // true: 84532, false: 8453
   const RECIPIENT = "0x02212a875c56baE7AF27A5a389FD4e8A11442692";
   const AMOUNT_ETH = "0.00001";
-  const BASE_MAINNET  = { chainId: "0x2105",  explorer: "https://basescan.org/tx/" };
-  const BASE_SEPOLIA  = { chainId: "0x14a34", explorer: "https://sepolia.basescan.org/tx/" };
+
+  const BASE_MAINNET = { chainId: "0x2105",  explorer: "https://basescan.org/tx/" };
+  const BASE_SEPOLIA = { chainId: "0x14a34", explorer: "https://sepolia.basescan.org/tx/" };
   const TARGET = USE_BASE_SEPOLIA ? BASE_SEPOLIA : BASE_MAINNET;
 
-  // ===== UI helpers =====
+  /* ===== UI helpers ===== */
   const statusEl = document.getElementById('status');
-  const playBtn  = document.getElementById('play');
+  const playBtn = document.getElementById('play');
   const playAgainBtn = document.getElementById('play-again');
-
   const showStatus = () => statusEl.classList.remove('hidden');
   const addLine = html => { showStatus(); statusEl.insertAdjacentHTML('beforeend', `<div>${html}</div>`); };
   const clearStatus = () => statusEl.innerHTML = '';
+  const disable = (el, yes=true) => { if (el) el.disabled = yes; };
 
-  function disable(el, yes=true){ if(el) el.disabled = yes; }
-
-  // ===== Wallet helpers =====
+  /* ===== Wallet helpers ===== */
   function parseEther(x){
     const [w,f=""]=String(x).split('.'); const frac=(f+'0'.repeat(18)).slice(0,18);
     return '0x'+(BigInt(w)*10n**18n+BigInt(frac)).toString(16);
   }
-
   async function getProvider(){
     try { const p = await sdk.wallet.getEthereumProvider(); if (p) return p; } catch {}
     return window.ethereum ?? null;
   }
-
   async function ensureChain(provider, chainId) {
     const current = (await provider.request({ method:'eth_chainId' }))?.toLowerCase();
     if (current === chainId.toLowerCase()) return;
@@ -106,15 +99,12 @@
     }
   }
 
-  // === REQUIRED TX FLOW ===
+  /* ===== REQUIRED TX FLOW ===== */
   async function requiredPayment() {
     clearStatus();
     addLine(`<b>Step 1:</b> locating wallet provider…`);
     const provider = await getProvider();
-    if (!provider) {
-      addLine(`<span class="err">No wallet available.</span> Open inside Farcaster or enable a wallet extension.`);
-      throw new Error('NO_PROVIDER');
-    }
+    if (!provider) { addLine(`<span class="err">No wallet available.</span> Open in Farcaster or enable a wallet.`); throw new Error('NO_PROVIDER'); }
     addLine(`<span class="ok">Provider ready.</span>`);
 
     addLine(`<b>Step 2:</b> requesting accounts…`);
@@ -127,29 +117,27 @@
 
     addLine(`<b>Step 4:</b> sending ${AMOUNT_ETH} ETH to ${RECIPIENT.slice(0,6)}…${RECIPIENT.slice(-4)}…`);
     const hash = await provider.request({
-      method: 'eth_sendTransaction',
-      params: [{ from, to: RECIPIENT, value: parseEther(AMOUNT_ETH) }]
+      method:'eth_sendTransaction',
+      params:[{ from, to: RECIPIENT, value: parseEther(AMOUNT_ETH) }]
     });
     addLine(`<span class="ok">TX sent.</span> <a target="_blank" rel="noopener" href="${TARGET.explorer}${hash}">View on Basescan</a>`);
-    return hash; // success
+    return hash;
   }
 
-  // Gate an action behind a required tx
   async function payThen(action, triggerBtn) {
     try {
       disable(triggerBtn, true);
-      await requiredPayment();
-      await action();              // only runs if tx succeeded
+      await requiredPayment();   // throws if anything fails
+      await action();            // only runs when tx succeeded
     } catch (e) {
-      // Failure: keep overlay / game over screen up; allow retry
-      console.warn('Payment gate blocked start/restart:', e);
+      console.warn('Payment gate blocked action:', e);
       addLine(`<span class="warn">Payment required. Please try again.</span>`);
     } finally {
       disable(triggerBtn, false);
     }
   }
 
-  // ===== Start game (payment required) =====
+  /* ===== Start: pay-gated ===== */
   playBtn.addEventListener('click', (e)=>{
     e.preventDefault();
     payThen(() => {
@@ -158,13 +146,15 @@
     }, playBtn);
   });
 
-  // ===== Snake =====
+  /* ===== Snake ===== */
   function initSnake(){
     const canvas=document.getElementById('game'),ctx=canvas.getContext('2d'),scoreEl=document.getElementById('score');
     const size=24,cells=canvas.width/size;
-    let snake=[{x:10,y:10}],dir={x:1,y:0},nextDir={x:1,y:0},food=spawn(),score=0,speed=120,alive=true,loopId;
+    let snake=[{x:10,y:10}],dir={x:1,y:0},nextDir={x:1,y:0},food=spawn(),score=0,speed=120,alive=true,loopId=null;
 
     draw();
+    loopId = setTimeout(step, speed);  // start loop after first draw
+
     window.addEventListener('keydown',handleKey);
     function handleKey(e){
       const k=e.key.toLowerCase();
@@ -177,58 +167,58 @@
     function spawn(){let fx,fy;do{fx=Math.floor(Math.random()*cells);fy=Math.floor(Math.random()*cells);}while(snake.some(s=>s.x===fx&&s.y===fy));return{x:fx,y:fy};}
 
     function step(){
-      if(!alive)return;
+      if(!alive) return;
       dir=nextDir;
       const head={x:(snake[0].x+dir.x+cells)%cells,y:(snake[0].y+dir.y+cells)%cells};
-      if(snake.some(s=>s.x===head.x&&s.y===head.y)){alive=false;return gameOver();}
+      if(snake.some(s=>s.x===head.x&&s.y===head.y)){ alive=false; return gameOver(); }
       snake.unshift(head);
-      if(head.x===food.x&&head.y===food.y){score++;scoreEl.textContent=String(score);food=spawn();if(speed>60)speed-=4;}
+      if(head.x===food.x&&head.y===food.y){ score++; scoreEl.textContent=String(score); food=spawn(); if(speed>60)speed-=4; }
       else snake.pop();
-      draw(); loopId=setTimeout(step,speed);
+      draw();
+      loopId = setTimeout(step, speed);
     }
 
     function draw(){
       ctx.fillStyle='#0e1418'; ctx.fillRect(0,0,canvas.width,canvas.height);
       ctx.strokeStyle='#0f1a21'; ctx.lineWidth=1;
       for(let i=0;i<=cells;i++){
-        ctx.beginPath();ctx.moveTo(i*size+0.5,0);ctx.lineTo(i*size+0.5,canvas.height);ctx.stroke();
-        ctx.beginPath();ctx.moveTo(0,i*size+0.5);ctx.lineTo(canvas.width,i*size+0.5);ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(i*size+0.5,0); ctx.lineTo(i*size+0.5,canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,i*size+0.5); ctx.lineTo(canvas.width,i*size+0.5); ctx.stroke();
       }
       ctx.fillStyle='#ef4444'; ctx.fillRect(food.x*size+2,food.y*size+2,size-4,size-4);
       ctx.fillStyle='#22c55e'; snake.forEach((s,i)=>{const pad=i===0?1:3; ctx.fillRect(s.x*size+pad,s.y*size+pad,size-pad*2,size-pad*2);});
-      setTimeout(step,speed);
     }
 
     function gameOver(){
+      if (loopId) { clearTimeout(loopId); loopId = null; }
       ctx.fillStyle='rgba(0,0,0,.4)'; ctx.fillRect(0,0,canvas.width,canvas.height);
       ctx.fillStyle='#e7ecf0'; ctx.font='bold 32px system-ui'; ctx.textAlign='center';
       ctx.fillText('Game Over',canvas.width/2,canvas.height/2-6);
       ctx.font='16px system-ui'; ctx.fillStyle='#a8b6c1';
-      ctx.fillText('Click “Pay & Play Again” (payment required)',canvas.width/2,canvas.height/2+20);
+      ctx.fillText('Payment required to play again',canvas.width/2,canvas.height/2+20);
 
-      // Show restart button that is ALSO pay-gated
+      // Show button; pay-gate restart
       playAgainBtn.classList.remove('hidden');
-      const clickOnce = async (e) => {
+
+      const once = async (e)=>{
         e.preventDefault();
         await payThen(() => {
-          // reset state only if payment succeeded
+          // reset only after successful tx
           playAgainBtn.classList.add('hidden');
           snake=[{x:10,y:10}]; dir=nextDir={x:1,y:0}; food=spawn(); score=0; scoreEl.textContent='0'; speed=120; alive=true;
-          ctx.clearRect(0,0,canvas.width,canvas.height);
-          draw();
+          draw(); loopId = setTimeout(step, speed);
         }, playAgainBtn);
-        // keep listener if payment failed (so user can try again)
+
         if (!playAgainBtn.classList.contains('hidden')) {
-          playAgainBtn.addEventListener('click', clickOnce, { once:true });
+          // payment failed -> re-attach for another attempt
+          playAgainBtn.addEventListener('click', once, { once:true });
         }
       };
-      playAgainBtn.addEventListener('click', clickOnce, { once:true });
+      playAgainBtn.addEventListener('click', once, { once:true });
     }
-
-    draw(); // initial frame
   }
 
-  // Debug surfacing too
+  // Debug surfacing
   window.addEventListener('error', e => console.error('Window error:', e.error||e));
   window.addEventListener('unhandledrejection', e => console.error('Unhandled promise:', e.reason));
 </script>
